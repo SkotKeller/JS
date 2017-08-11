@@ -1,0 +1,170 @@
+package info.faceland.beast;
+
+import com.tealcube.minecraft.bukkit.facecore.plugin.FacePlugin;
+import com.tealcube.minecraft.bukkit.facecore.shade.config.MasterConfiguration;
+import com.tealcube.minecraft.bukkit.facecore.shade.config.SmartYamlConfiguration;
+import com.tealcube.minecraft.bukkit.facecore.shade.config.VersionedSmartYamlConfiguration;
+import com.tealcube.minecraft.bukkit.facecore.shade.config.VersionedSmartConfiguration.VersionUpdateType;
+import com.tealcube.minecraft.bukkit.kern.apache.commons.lang3.math.NumberUtils;
+import com.tealcube.minecraft.bukkit.kern.objecthunter.exp4j.ExpressionBuilder;
+import info.faceland.beast.BeastData;
+import info.faceland.beast.BeastListener;
+import info.faceland.beast.DropData;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.entity.EntityType;
+import org.bukkit.event.HandlerList;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+
+public final class BeastPlugin extends FacePlugin {
+    private Map<EntityType, BeastData> beastDataMap;
+    private VersionedSmartYamlConfiguration configYAML;
+    private VersionedSmartYamlConfiguration monstersYAML;
+    private VersionedSmartYamlConfiguration replacementsYAML;
+    private MasterConfiguration settings;
+
+    public BeastPlugin() {
+    }
+
+    public void enable() {
+        this.beastDataMap = new HashMap();
+        this.configYAML = new VersionedSmartYamlConfiguration(new File(this.getDataFolder(), "config.yml"), this.getResource("config.yml"), VersionUpdateType.BACKUP_AND_UPDATE);
+        if(this.configYAML.update()) {
+            this.getLogger().info("Updating config.yml");
+        }
+
+        this.monstersYAML = new VersionedSmartYamlConfiguration(new File(this.getDataFolder(), "monsters.yml"), this.getResource("monsters.yml"), VersionUpdateType.BACKUP_AND_UPDATE);
+        if(this.monstersYAML.update()) {
+            this.getLogger().info("Updating monsters.yml");
+        }
+
+        this.replacementsYAML = new VersionedSmartYamlConfiguration(new File(this.getDataFolder(), "replacements.yml"), this.getResource("replacements.yml"), VersionUpdateType.BACKUP_AND_UPDATE);
+        if(this.replacementsYAML.update()) {
+            this.getLogger().info("Updating replacements.yml");
+        }
+
+        this.settings = new MasterConfiguration();
+        this.settings.load(new SmartYamlConfiguration[]{this.configYAML, this.replacementsYAML, this.monstersYAML});
+        Iterator i$ = this.monstersYAML.getKeys(false).iterator();
+
+        while(true) {
+            String key;
+            EntityType entityType;
+            do {
+                do {
+                    if(!i$.hasNext()) {
+                        Bukkit.getPluginManager().registerEvents(new BeastListener(this), this);
+                        return;
+                    }
+
+                    key = (String)i$.next();
+                } while(!this.monstersYAML.isConfigurationSection(key));
+
+                entityType = EntityType.valueOf(key);
+            } while(entityType == null);
+
+            ConfigurationSection cs = this.monstersYAML.getConfigurationSection(key);
+            BeastData data = new BeastData(entityType);
+            data.setNameFormat(cs.getString("name"));
+            String healthExpStr = cs.getString("health", "1");
+            String damageExpStr = cs.getString("damage", "1");
+            String experienceExpStr = cs.getString("experience", "1");
+            String movementSpeedExpStr = cs.getString("movement-speed", "1");
+            data.setHealthExpression((new ExpressionBuilder(healthExpStr)).variables(new String[]{"LEVEL"}).build());
+            data.setDamageExpression((new ExpressionBuilder(damageExpStr)).variables(new String[]{"LEVEL"}).build());
+            data.setExperienceExpression((new ExpressionBuilder(experienceExpStr)).variables(new String[]{"LEVEL"}).build());
+            data.setSpeedExpression((new ExpressionBuilder(movementSpeedExpStr)).variables(new String[]{"LEVEL"}).build());
+            ConfigurationSection dCS;
+            Iterator i$1;
+            String k;
+            if(cs.isConfigurationSection("potion-effects")) {
+                HashMap drops = new HashMap();
+                dCS = cs.getConfigurationSection("potion-effects");
+                i$1 = dCS.getKeys(false).iterator();
+
+                while(true) {
+                    if(!i$1.hasNext()) {
+                        data.setPotionEffectMap(drops);
+                        break;
+                    }
+
+                    k = (String)i$1.next();
+                    List inner = dCS.getStringList(k);
+                    ArrayList dropData = new ArrayList();
+                    Iterator i$2 = inner.iterator();
+
+                    while(i$2.hasNext()) {
+                        String s = (String)i$2.next();
+                        PotionEffect pot = this.parsePotionEffect(s);
+                        if(pot != null) {
+                            dropData.add(pot);
+                        }
+                    }
+
+                    drops.put(Integer.valueOf(NumberUtils.toInt(k)), dropData);
+                }
+            }
+
+            if(cs.isConfigurationSection("drops")) {
+                ArrayList drops1 = new ArrayList();
+                dCS = cs.getConfigurationSection("drops");
+                i$1 = dCS.getKeys(false).iterator();
+
+                while(i$1.hasNext()) {
+                    k = (String)i$1.next();
+                    if(dCS.isConfigurationSection(k)) {
+                        ConfigurationSection inner1 = dCS.getConfigurationSection(k);
+                        DropData dropData1 = new DropData(Material.getMaterial(k), inner1.getInt("min-amount"), inner1.getInt("max-amount"), inner1.getDouble("chance"));
+                        if(dropData1.getMaterial() != Material.AIR) {
+                            drops1.add(dropData1);
+                        }
+                    }
+                }
+
+                data.setDrops(drops1);
+            }
+
+            this.beastDataMap.put(entityType, data);
+        }
+    }
+
+    public void disable() {
+        HandlerList.unregisterAll(this);
+        this.settings = null;
+        this.replacementsYAML = null;
+        this.monstersYAML = null;
+        this.configYAML = null;
+        this.beastDataMap = null;
+    }
+
+    private PotionEffect parsePotionEffect(String s) {
+        String[] spl = s.split(":");
+        if(spl.length < 2) {
+            return null;
+        } else {
+            PotionEffectType type = PotionEffectType.getByName(spl[0]);
+            if(type == null) {
+                return null;
+            } else {
+                int i = NumberUtils.toInt(spl[1]);
+                return new PotionEffect(type, 100, i);
+            }
+        }
+    }
+
+    public MasterConfiguration getSettings() {
+        return this.settings;
+    }
+
+    public BeastData getData(EntityType type) {
+        return this.beastDataMap.containsKey(type)?(BeastData)this.beastDataMap.get(type):null;
+    }
+}
