@@ -1,0 +1,145 @@
+package info.faceland.beast;
+
+import com.tealcube.minecraft.bukkit.facecore.utilities.TextUtils;
+import com.tealcube.minecraft.bukkit.kern.apache.commons.lang3.math.NumberUtils;
+import com.tealcube.minecraft.bukkit.kern.shade.google.common.base.CharMatcher;
+import info.faceland.beast.BeastData;
+import info.faceland.beast.BeastPlugin;
+import info.faceland.beast.DropData;
+import info.faceland.beast.Vec2;
+import info.faceland.beast.BeastListener.1;
+import java.util.Iterator;
+import java.util.Random;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Monster;
+import org.bukkit.entity.Skeleton;
+import org.bukkit.entity.Wolf;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.Listener;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.potion.PotionEffect;
+import org.bukkit.potion.PotionEffectType;
+
+public final class BeastListener implements Listener {
+    private final BeastPlugin plugin;
+    private final Random random;
+
+    public BeastListener(BeastPlugin plugin) {
+        this.plugin = plugin;
+        this.random = new Random(System.currentTimeMillis());
+    }
+
+    @EventHandler(
+        priority = EventPriority.LOWEST
+    )
+    public void onCreatureSpawnLowest(CreatureSpawnEvent event) {
+        if(!event.isCancelled() && event.getEntity() instanceof Monster && event.getSpawnReason() != SpawnReason.SPAWNER) {
+            EntityType replacementType = EntityType.valueOf(this.plugin.getSettings().getString("replacements." + event.getEntity().getType().name() + "." + event.getLocation().getBlock().getBiome().name(), event.getEntity().getType().name()));
+            if(replacementType != event.getEntity().getType() && replacementType != null) {
+                Bukkit.getScheduler().scheduleSyncDelayedTask(this.plugin, new 1(this, event, replacementType));
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(
+        priority = EventPriority.HIGHEST
+    )
+    public void onCreatureSpawnHighest(CreatureSpawnEvent event) {
+        BeastData data = this.plugin.getData(event.getEntity().getType());
+        if(data != null && !event.isCancelled()) {
+            int startingLevel = this.plugin.getSettings().getInt("config.enabled-worlds." + event.getLocation().getWorld().getName() + ".starting-level", -1);
+            if(startingLevel >= 0) {
+                event.getEntity().getEquipment().clear();
+                if(event.getEntity() instanceof Skeleton) {
+                    if(this.random.nextDouble() < this.plugin.getSettings().getDouble("config.give-skeletons-sword-chance", 0.1D)) {
+                        event.getEntity().getEquipment().setItemInHand(new ItemStack(Material.STONE_SWORD));
+                    } else {
+                        event.getEntity().getEquipment().setItemInHand(new ItemStack(Material.BOW));
+                    }
+
+                    event.getEntity().getEquipment().setItemInHandDropChance(0.0F);
+                }
+
+                Vec2 pos = new Vec2(event.getLocation().getX(), event.getLocation().getZ());
+                Vec2 worldPos = new Vec2(event.getLocation().getWorld().getSpawnLocation().getX(), event.getLocation().getWorld().getSpawnLocation().getZ());
+                double distanceFromSpawn = pos.distance(worldPos);
+                double pow = (double)this.plugin.getSettings().getInt("config.enabled-worlds." + event.getLocation().getWorld().getName() + ".distance-per-level", 150);
+                int level = (int)((double)startingLevel + distanceFromSpawn / pow);
+                if(event.getSpawnReason() == SpawnReason.SPAWNER) {
+                    level += 10;
+                }
+
+                String name = TextUtils.color(TextUtils.args(data.getNameFormat(), new String[][]{{"%level%", String.valueOf(level)}}));
+                if(event.getSpawnReason() == SpawnReason.SPAWNER) {
+                    name = name + "*";
+                }
+
+                event.getEntity().setCustomName(name);
+                double currentMaxHealth = event.getEntity().getMaxHealth();
+                double newMaxHealth = data.getHealthExpression().setVariable("LEVEL", (double)level).evaluate();
+                double speed = data.getSpeedExpression().setVariable("LEVEL", (double)level).evaluate();
+                event.getEntity().setHealth(Math.min(currentMaxHealth, newMaxHealth) / 2.0D);
+                event.getEntity().setMaxHealth(newMaxHealth);
+                event.getEntity().setHealth(event.getEntity().getMaxHealth());
+                event.getEntity().setCanPickupItems(false);
+                event.getEntity().addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 12000, (int)speed, false, false));
+                if(event.getEntity() instanceof Wolf) {
+                    ((Wolf)event.getEntity()).setAngry(true);
+                }
+
+            }
+        }
+    }
+
+    @EventHandler(
+        priority = EventPriority.LOWEST
+    )
+    public void onEntityDeathEvent(EntityDeathEvent event) {
+        if(!(event instanceof PlayerDeathEvent)) {
+            BeastData data = this.plugin.getData(event.getEntityType());
+            if(data != null) {
+                if(event.getEntity().getCustomName() != null) {
+                    double mult = 1.0D;
+                    if(event.getEntity().getLastDamageCause() != null) {
+                        DamageCause cause = event.getEntity().getLastDamageCause().getCause();
+                        if(cause != DamageCause.ENTITY_ATTACK) {
+                            mult *= 0.2D;
+                        }
+
+                        if(event.getEntity().getCustomName().endsWith("*")) {
+                            mult *= 0.3333333333333333D;
+                        }
+
+                        int level = NumberUtils.toInt(CharMatcher.DIGIT.retainFrom(ChatColor.stripColor(event.getEntity().getCustomName())));
+                        event.setDroppedExp((int)(data.getExperienceExpression().setVariable("LEVEL", (double)level).evaluate() * mult));
+                        if(!data.getDrops().isEmpty()) {
+                            event.getDrops().clear();
+                            Iterator i$ = data.getDrops().iterator();
+
+                            while(i$.hasNext()) {
+                                DropData dropData = (DropData)i$.next();
+                                if(this.random.nextDouble() < dropData.getChance()) {
+                                    int amount = dropData.getMinimumAmount() + (int)(this.random.nextDouble() * (double)(dropData.getMaximumAmount() - dropData.getMinimumAmount()));
+                                    if(amount > 0 && dropData.getMaterial() != Material.AIR) {
+                                        event.getDrops().add(new ItemStack(dropData.getMaterial(), amount));
+                                    }
+                                }
+                            }
+
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
