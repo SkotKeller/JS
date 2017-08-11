@@ -1,0 +1,17 @@
+package info.faceland.beast;
+
+import info.faceland.beast.BeastListener;
+import org.bukkit.entity.EntityType;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+
+class BeastListener$1 implements Runnable {
+    BeastListener$1(BeastListener var1, CreatureSpawnEvent var2, EntityType var3) {
+        this.this$0 = var1;
+        this.val$event = var2;
+        this.val$replacementType = var3;
+    }
+
+    public void run() {
+        this.val$event.getLocation().getWorld().spawnEntity(this.val$event.getEntity().getLocation(), this.val$replacementType);
+    }
+}
