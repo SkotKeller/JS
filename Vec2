@@ -1,0 +1,60 @@
+package info.faceland.beast;
+
+public class Vec2 {
+    private double x;
+    private double z;
+
+    public Vec2(double x, double z) {
+        this.x = x;
+        this.z = z;
+    }
+
+    public double getX() {
+        return this.x;
+    }
+
+    public void setX(double x) {
+        this.x = x;
+    }
+
+    public double getZ() {
+        return this.z;
+    }
+
+    public void setZ(double z) {
+        this.z = z;
+    }
+
+    public double distanceSquared(Vec2 o) {
+        if(o == null) {
+            return 0.0D;
+        } else {
+            double xDist = this.getX() - o.getX();
+            double zDist = this.getZ() - o.getZ();
+            return Math.pow(xDist, 2.0D) + Math.pow(zDist, 2.0D);
+        }
+    }
+
+    public double distance(Vec2 o) {
+        return o == null?0.0D:Math.sqrt(this.distanceSquared(o));
+    }
+
+    public boolean equals(Object o) {
+        if(this == o) {
+            return true;
+        } else if(!(o instanceof Vec2)) {
+            return false;
+        } else {
+            Vec2 vec2 = (Vec2)o;
+            return Double.compare(vec2.x, this.x) == 0 && Double.compare(vec2.z, this.z) == 0;
+        }
+    }
+
+    public int hashCode() {
+        long temp = Double.doubleToLongBits(this.x);
+        int result = (int)(temp ^ temp >>> 32);
+        temp = Double.doubleToLongBits(this.z);
+        result = 31 * result + (int)(temp ^ temp >>> 32);
+        return result;
+    }
+}
