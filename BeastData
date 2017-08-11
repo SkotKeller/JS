@@ -1,0 +1,105 @@
+package info.faceland.beast;
+
+import com.tealcube.minecraft.bukkit.kern.objecthunter.exp4j.Expression;
+import info.faceland.beast.DropData;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.bukkit.entity.EntityType;
+import org.bukkit.potion.PotionEffect;
+
+public final class BeastData {
+    private final EntityType type;
+    private String nameFormat;
+    private Expression healthExpression;
+    private Expression experienceExpression;
+    private Expression damageExpression;
+    private Expression speedExpression;
+    private Map<Integer, List<PotionEffect>> potionEffectMap;
+    private List<DropData> drops;
+
+    public BeastData(EntityType type) {
+        this.type = type;
+        this.drops = new ArrayList();
+    }
+
+    public EntityType getType() {
+        return this.type;
+    }
+
+    public String getNameFormat() {
+        return this.nameFormat;
+    }
+
+    public void setNameFormat(String nameFormat) {
+        this.nameFormat = nameFormat;
+    }
+
+    public Expression getHealthExpression() {
+        return this.healthExpression;
+    }
+
+    public void setHealthExpression(Expression healthExpression) {
+        this.healthExpression = healthExpression;
+    }
+
+    public Expression getExperienceExpression() {
+        return this.experienceExpression;
+    }
+
+    public void setExperienceExpression(Expression experienceExpression) {
+        this.experienceExpression = experienceExpression;
+    }
+
+    public Expression getDamageExpression() {
+        return this.damageExpression;
+    }
+
+    public void setDamageExpression(Expression damageExpression) {
+        this.damageExpression = damageExpression;
+    }
+
+    public Map<Integer, List<PotionEffect>> getPotionEffectMap() {
+        return this.potionEffectMap;
+    }
+
+    public void setPotionEffectMap(Map<Integer, List<PotionEffect>> potionEffectMap) {
+        this.potionEffectMap = potionEffectMap;
+    }
+
+    public int hashCode() {
+        return this.type != null?this.type.hashCode():0;
+    }
+
+    public boolean equals(Object o) {
+        if(this == o) {
+            return true;
+        } else if(o != null && this.getClass() == o.getClass()) {
+            BeastData beastData = (BeastData)o;
+            return this.type == beastData.type;
+        } else {
+            return false;
+        }
+    }
+
+    public List<DropData> getDrops() {
+        return this.drops;
+    }
+
+    public void setDrops(List<DropData> drops) {
+        if(drops == null) {
+            this.drops.clear();
+        } else {
+            this.drops = drops;
+        }
+
+    }
+
+    public Expression getSpeedExpression() {
+        return this.speedExpression;
+    }
+
+    public void setSpeedExpression(Expression speedExpression) {
+        this.speedExpression = speedExpression;
+    }
+}
